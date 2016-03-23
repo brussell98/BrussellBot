@@ -26,6 +26,7 @@
 		"osu-api": "*",
 		"chalk": "*",
 		"entities": ">=1.1.1",
-		"winston": ">=2.2.0"
+		"winston": ">=2.2.0",
+		"jsonfile": "*"
 	}
 }
