@@ -7,10 +7,13 @@ var osuapi = require("osu-api");
 var ent = require("entities");
 var waifus = require("./waifus.json");
 var db = require("./db.js");
+var jsonfile = require("jsonfile");
 
 var VoteDB = {}
-	,LottoDB = {}
-	,Ratings = {};
+	,LottoDB = {};
+
+var ratings = require("./waifus.json");
+
 const IMGUR_CLIENT_ID = config.imgur_client_id;
 const OSU_API_KEY = config.osu_api_key;
 const OWM_API_KEY = config.weather_api_key;
@@ -45,7 +48,7 @@ function findUser(members, query) {
 	return usr || false;
 }
 
-function generateRandomRating(fullName, storeRating) {
+function generateWaifuRating(fullName) {
 	var weightedNumber = Math.floor((Math.random() * 20) + 1); //between 1 and 20
 	var score, moreRandom = Math.floor(Math.random() * 4);
 	if (weightedNumber < 5) score = Math.floor((Math.random() * 3) + 1); //between 1 and 3
@@ -53,43 +56,10 @@ function generateRandomRating(fullName, storeRating) {
 	else if (weightedNumber > 15) score = Math.floor((Math.random() * 3) + 8); //between 8 and 10
 	if (moreRandom === 0 && score !== 1) score -= 1;
 	else if (moreRandom == 3 && score != 10) score += 1;
-	if (storeRating) Ratings[fullName.toLowerCase()] = score;
-	return score;
-}
-
-function generateUserRating(bot, msg, fullName) {
-	var user = msg.channel.server.members.get("username", fullName);
-	if (user === undefined) return generateRandomRating();
-	var score = generateRandomRating() - 1;
-	var details = msg.channel.server.detailsOfUser(user);
-	if (details) {
-		var joined = new Date(details.joinedAt), now = new Date();
-		if (now.valueOf() - joined.valueOf() >= 2592000000) { score += 1; } //if user has been on the server for at least one month +1
-	}
-	if (msg.channel.permissionsOf(user).hasPermission("manageServer")) score += 1; //admins get +1 ;)
-	var count = 0;
-	bot.servers.map((server) => { if (server.members.get("id", user.id)) count += 1; }); //how many servers does the bot share with them
-	if (count > 2) score += 1; //if we share at least 3 servers
-	if (!user.avatarURL) score -= 1; //gotta have an avatar
-	if (user.username.length > 22) score -= 1; //long usernames are hard to type so -1
-	if (score > 10) score = 10; else if (score < 1) score = 1; //keep it within 1-10
-	Ratings[fullName.toLowerCase()] = score;
-	return score;
-}
-
-function generateJSONRating(fullName) {
-	var ranking = waifus[fullName];
-	var ranges = {
-		"1": "1-4", "2": "2-4",
-		"3": "4-8", "4": "4-8",
-		"5": "5-8", "6": "6-9",
-		"7": "7-10", "8": "8-10",
-		"9": "10-10"
-	};
-	var score = Math.floor((Math.random() * ((parseInt(ranges[ranking].split("-")[1], 10) + 1 - parseInt(ranges[ranking].split("-")[0], 10)))) + parseInt(ranges[ranking].split("-")[0], 10))
-	var moreRandom = Math.floor(Math.random() * 4); //0-3
-	if (score > 1 && moreRandom === 0) score -= 1; else if (score < 10 && moreRandom == 3) score += 1;
-	Ratings[fullName.toLowerCase()] = score;
+	ratings[fullName.toLowerCase()] = score;
+	
+	jsonfile.writeFile("./bot/waifus.json", ratings, function(err) {if (err) {console.log("Couldn't write file!"); console.error(err);}});
+	
 	return score;
 }
 
@@ -152,6 +122,16 @@ var commands = {
 					if (commands[suffix].hasOwnProperty("deleteCommand")) toSend.push("*Can delete the activating message*");
 					bot.sendMessage(msg, toSend);
 				} else bot.sendMessage(msg, "Command `" + suffix + "` not found. Aliases aren't allowed.", (erro, wMessage)=>{ bot.deleteMessage(wMessage, {"wait": 8000}); });
+			}
+		}
+	},
+	"game": {
+		desc: "Set the currently played game.",
+		cooldown: 0, usage: "[game]",
+		process: function(bot, msg, suffix) {
+			if (config["allowChangeGame"]) {
+				if (suffix) bot.setPlayingGame(suffix);
+				else bot.setPlayingGame(null);
 			}
 		}
 	},
@@ -865,35 +845,28 @@ var commands = {
 			if (msg.mentions.length > 1) { bot.sendMessage(msg, "Multiple mentions aren't allowed!", (erro, wMessage) => { bot.deleteMessage(wMessage, {"wait": 10000}); }); return; }
 			if (suffix.toLowerCase().replace("-", " ") == bot.user.username.toLowerCase().replace("-", " ")) { bot.sendMessage(msg, "I'd rate myself **10/10**"); return; }
 			var fullName = "", user = false;
-			if (suffix.search(/--s(earch)?/i) > -1) {
-				var showBase = (suffix.search(/--b(ase)?/i) > -1) ? true : false
-					,query = suffix.replace(/--s(earch)?/i, '').replace(/--b(ase)?/i, '').toLowerCase().trim()
-					,results = ["__Results:__"];
-				Object.keys(waifus).map(name=>{if (name.toLowerCase().indexOf(query) > -1) (showBase) ? results.push(waifus[name] + ', ' + name) : results.push(name);});
-				if (results.length > 1) {
-					if (results.join('\n').length < 2000) bot.sendMessage(msg, results.join('\n'));
-					else bot.sendMessage(msg, results.join('\n').substr(0,2000));
-				} else bot.sendMessage(msg, "No names found matching that in the database");
-			} else {
-			if (!msg.channel.isPrivate) { user = msg.channel.server.members.find((member) => { return (member === undefined || member.username == undefined) ? false : member.username.toLowerCase() == suffix.toLowerCase() }); } else user = false;
-			if (!user && msg.mentions.length < 1) {
-				Object.keys(waifus).map(name=>{if (name.toLowerCase() == suffix.toLowerCase()) { fullName = name; return; }});
-				if (!fullName) { Object.keys(waifus).map(name=>{if (name.split(" ")[0].toLowerCase() == suffix.toLowerCase()) {fullName = name; return;}}); }
-				if (!fullName) { Object.keys(waifus).map(name=>{if (name.split(" ").length > 1) {for (var i = 1;i < name.split(" ").length;i++) {if (name.split(" ")[i].toLowerCase() == suffix.toLowerCase()) {fullName = name; return;}}}}); }
-			} else {
-				if (msg.mentions.length > 0) { fullName = msg.mentions[0].username; if (msg.mentions[0].username == bot.user.username) { bot.sendMessage(msg, "I'd rate myself **10/10**"); return; }
-				} else if (user) fullName = user.username;
+			
+			if (!msg.channel.isPrivate) { 
+				user = msg.channel.server.members.find((member) => { return (member === undefined || member.username == undefined) ? false : 
+				member.username.toLowerCase() == suffix.toLowerCase() }); 
+			} else user = false;
+			
+			if (msg.mentions.length > 0) { fullName = msg.mentions[0].username; if (msg.mentions[0].username == bot.user.username) { bot.sendMessage(msg, "I'd rate myself **10/10**"); return; }
+			} else if (user) fullName = user.username;
+			else if (!user && msg.mentions.length < 1) { //if ratings contains the name
+				Object.keys(ratings).map(name=>{if (name.toLowerCase() == suffix.toLowerCase()) { fullName = name; return; }});
+				if (!fullName) { Object.keys(ratings).map(name=>{if (name.split(" ")[0].toLowerCase() == suffix.toLowerCase()) {fullName = name; return;}}); }
+				if (!fullName) { Object.keys(ratings).map(name=>{if (name.split(" ").length > 1) {for (var i = 1;i < name.split(" ").length;i++) {if (name.split(" ")[i].toLowerCase() == suffix.toLowerCase()) {fullName = name; return;}}}}); }
 			}
 			if (fullName) {
-				if (Ratings.hasOwnProperty(fullName.toLowerCase())) bot.sendMessage(msg, "I gave " + fullName + " a **" + Ratings[fullName.toLowerCase()] + "/10**"); //already rated
+				if (ratings.hasOwnProperty(fullName.toLowerCase())) bot.sendMessage(msg, "I gave " + fullName + " a **" + ratings[fullName.toLowerCase()] + "/10**"); //already rated
 				else {
-					if (user || msg.mentions.length > 0) bot.sendMessage(msg, "I'd rate " + fullName.replace(/@/g, '@\u200b') + " **" + generateUserRating(bot, msg, fullName) + "/10**");
-					else bot.sendMessage(msg, "I'd rate " + fullName.replace(/@/g, '@\u200b') + " **" + generateJSONRating(fullName) + "/10**");
+					if (user || msg.mentions.length > 0) bot.sendMessage(msg, "I'd rate " + fullName.replace(/@/g, '@\u200b') + " **" + generateWaifuRating(bot, msg, fullName) + "/10**");
+					else bot.sendMessage(msg, "I'd rate " + fullName.replace(/@/g, '@\u200b') + " **" + generateWaifuRating(fullName) + "/10**");
 				}
 			} else {
-				if (Ratings.hasOwnProperty(suffix.toLowerCase())) bot.sendMessage(msg, "I gave " + suffix + " a **" + Ratings[suffix.toLowerCase()] + "/10**"); //already rated
-				else bot.sendMessage(msg, "I give " + suffix.replace(/@/g, '@\u200b') + " a **" + generateRandomRating(suffix.toLowerCase(), true) + "/10**");
-			}
+				if (ratings.hasOwnProperty(suffix.toLowerCase())) bot.sendMessage(msg, "I gave " + suffix + " a **" + ratings[suffix.toLowerCase()] + "/10**"); //already rated
+				else bot.sendMessage(msg, "I give " + suffix.replace(/@/g, '@\u200b') + " a **" + generateWaifuRating(suffix.toLowerCase(), true) + "/10**");
 			}
 		}
 	},
