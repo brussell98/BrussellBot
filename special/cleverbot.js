@@ -2,7 +2,7 @@ var reload      = require('require-reload')(require),
 	Cleverbot   = reload('cleverbot-node'),
 	Waifu       = new Cleverbot(),
 	entities    = require('entities'),
-	logger      = new (reload('../utils/Logger.js'))((reload('../config.json')).logTimestamp, 'yellow'),
+	logger      = new (reload('../utils/Logger.js'))((reload('../config.js')).logTimestamp, 'yellow'),
 	antiSpam    = {};
 
 Cleverbot.prepare(() => {});

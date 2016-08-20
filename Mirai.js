@@ -1,7 +1,7 @@
 var reload          = require('require-reload')(require),
     fs              = require('fs'),
     Eris            = require('eris'),
-    config          = reload('./config.json'),
+    config          = reload('./config.js'),
     validateConfig  = reload('./utils/validateConfig.js'),
     CommandManager  = reload('./utils/CommandManager.js'),
     utils           = reload('./utils/utils.js'),
@@ -251,7 +251,7 @@ function reloadModule(msg) {
 	} else if (arg === 'config') {
 
 		validateConfig = reload('./utils/validateConfig.js');
-		config = reload('./config.json');
+		config = reload('./config.js');
 		validateConfig(config).catch(() => process.exit(0));
 		bot.createMessage(msg.channel.id, "Reloaded config");
 	}
