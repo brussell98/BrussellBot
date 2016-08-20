@@ -1,7 +1,7 @@
 var fs = require('fs'),
 	superagent = require('superagent'),
 	reload = require('require-reload'),
-	logger = new (reload('./Logger.js'))((reload('../config.json')).logTimestamp);
+	logger = new (reload('./Logger.js'))((reload('../config.js')).logTimestamp);
 
 /**
 * Contains various functions.
