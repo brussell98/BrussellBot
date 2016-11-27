@@ -48,7 +48,6 @@ class CommandManager {
 								let command = new Command(name, this.prefix, reload(this.directory + name + '.js'), bot, config);
 								this.commands[name] = command;
 								settingsManager.commandList[this.prefix].push(name);
-
 								if (command.fallback) {
 									this.fallbackCommands.push(command);
 								}
@@ -57,7 +56,6 @@ class CommandManager {
 							}
 						}
 					}
-
 					resolve();
 				}
 			});
