@@ -1,6 +1,12 @@
 if (parseFloat(process.versions.node) < 6)
 	throw new Error('Incompatible node version. Install Node 6 or higher.');
 
+try {
+	Promise = require("bluebird");
+} catch(err) {
+	Promise = global.Promise;
+}
+
 var reload          = require('require-reload')(require),
 	fs              = require('fs'),
 	Eris            = require('eris'),
